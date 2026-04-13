@@ -1,0 +1,131 @@
+Our FYDP title is " Site Specific Digitized Foundation design recommendations based upon AI driven geotechnical sub soil characterization of Islamabad Region"
+
+
+Final Output: 
+We are developing a website where User (Consultancy company ) would input parameter depending upon the latitude and longitude he enters.
+We basically have divided the Users into 2 users...... User#1 & User#2
+
+-----------------------------------------------Phase#1------------------------------------------------------
+User#1 (Inside our database)
+If the latitude and longitude entered by the user falls within our database (region we have targeted), then demand only structural load (q) in kN from the user.
+Once we get the structural load (q) from the user, then we will have the following parameters for our further processing in the Phase#2
+- Latitude, Longitude
+- Depth wise N value
+- Depth wise Cohesion (c) in kPa
+- Depth wise Dry Unit weight in kN/m3 (γd)
+- Depth wise Layer Classification
+- Structural Load (q) in kN
+It is important to note that User#1 database has friction angle equal to zero, so φ = 0 for user#1
+
+However since User#2 database is continuously updated in future, it may have friction angle (φ).
+
+
+User#2 (Outside our database):
+But if the latitude and longitude entered by the user doesn't fall within our data base system, then demand the following parameters from the user in the form of array (tabular form)
+
+Depth in ft | N Value | Cohesion in kPa | Friction Angle φ | Dry Unit weight in kN/m3 (γd) |  Layer Classification |
+
+Also keep adding the data this new user inputs including the latitude and longitude user entered in our existing database at the backend of the website. Actually we aim to scale up using this new data in future to cover whole Islamabad region (for now we are targetted towards Zone#4 OF Islamabad)
+
+After this prompt to user, demand structural load (q) in kN as well from the user.
+After this input from the user, we will have the following things 
+- Latitude, Longitude
+- Depth wise N value
+- Depth wise Cohesion (c) in kPa
+- Depth wise Friction Angle (φ)
+- Depth wise Dry Unit weight in kN/m3 (γd)
+- Depth wise Layer Classification
+- Structural Load (q) in kN
+- Ground Watertable (G)
+
+This marks the end of the Phase#1 of our data base in which we demand input from the User.
+-------------------------------------- Phase#1 Ended ------------------------------------------------------
+
+----------------------------------Phase#2 (Calculation Phase)----------------------------------------------
+Now in Phase#2 we will use the previous parameters (parameter in tabular forms) and do calculations using 2 main equations
+
+- Terzaghi Bearing Capacity Equation
+
+Lets start with Terzaghi Bearing Capacity Equation
+
+--------------Terzaghi Bearing Capacity Calculations for Foundation Design Recommendations --------
+𝑞𝑢 = 1.3𝑐𝑁𝑐 +Q𝑁𝑞 + 0.4𝛾𝐵𝑁y ----------------- Eq(1) 
+This c is the cohesion in kPa as defined in Phase#1, Q will be calculated later, Nc, Nq and Ny are the factors which have to be extracted from the table using the friction angle defined in Phase#1 (For User#1 we have φ = 0)
+𝑞𝑢 = (q x 3)/ (B x B)  ---------------------------- Eq (2) (This q is the structural load in kN as defined in Phase#1 from user)
+Now we will define further parameters for foundation design
+H is the depth of foundation in ft from the top.
+
+
+If the user falls outside our database, then use the values enetered by user to perform calculations for each layer as mentioned and instructed below. 
+Methodolgy would be same as mentioned below, but only difference would be that in our database, you have to select and identify the layer but if parameters or layers are put by the user#2, then those layers would be used as it is in the foundationn design calculations.
+At each longitude , latitude in our database
+Each row would correspond to a seperate Layer which would be titled as layer#1, layer#2 etc and so on.
+Cohesion and unit weight of Layer#1 would be c1 and 𝛾1  and Depth of Layer#1 would be d1.
+2nd  row would be titled as Layer#2 and would have c2, 𝛾2 and d2
+And it would be so on for further layers.
+
+The layer number would reset once the location (latitude , longitude) changes.
+For example when location changes the 1st row would again become layer#1 and its parameters would be c1 , d1 & 𝛾1 and so on.
+
+Now, whatever value of H is there in ft  decide how many layers are above that H using the above depths of layers as instructed and decide that our H is in which layer.
+Example#1: If H= 3ft from the top and in our database 1st row has depth d1=5ft  then that means that our H lies in 1st layer and parameter of only 1st layer would be used. 
+
+Example#2: If H = 7 ft  from the top and in our database 1st row has depth d1 = 5ft and 2nd row has depth d2= 10 ft , then that means that H is in 2nd Layer and parameters of  2 layers would be used for  further calculations.
+
+Example#3: If H = 8 ft from the top, and in our database 1st row has a dept d1 = 2ft, 2nd row has depth d2 = 5ft and 3rd row has a depth d3  = 5ft, then that means that our H lies in Layer#3 and parameters of all 3 layers would be used.
+
+Similarly using the same logic as explained above with examples, you have to first identify that our H (Foundation depth) lies in which layer.
+So we can say that Once we use any value of H in our iterations, then the code has to first of all decide that H lies in which layer. 
+
+Q = γavg x H -------- Eq(3) 
+where γavg is the weighted average unit weight in kN/m3 and H is the depth of foundation from the top in ft.
+Now to calculate γavg, I am giving a general formula which needs to be adjusted accordingly depending upon the H and layers
+γavg = [(γ1 x d1) +  (γ2 x d2) + ...............+ (γn x dn)] / [d1 + d2 + ............ + dn] ----------- Eq (4) 
+
+In whichever layer H lies , then all the parameters of succeeding layers would be put equal to zero in Eq(4) and the depth of that particular layer in Eq(4) would become equal to H - (summation of all the preceeding depths of preceeding layers.)
+
+For example, If H lies in Layer#1 , then γ2 , d2, γ3, d3, γ4, d4 and so on would be zero in Eq(4) and d1 in Eq(4) would be H - 0 (since the summation is 0 because there are no preceeding layers.)
+
+If H lies in Layer#2, then γ3, d3, γ4, d4 and so on would be zero in Eq(4), while d1 in Eq(4) would be used from the database and d2 in Eq(4) would be H - d1
+
+If H lies in Layer#3, the γ4, d4 and so on would be zero in Eq(4), while d1, d2 in Eq(4) would be used from the database and d3 in Eq(4) would be H - (d1 + d2)
+
+
+
+Now to calculate cavg, I am giving a general formula which needs to be adjusted accordingly depending upon the H and layers
+c avg = [(c1 x d1) +  (c2 x d2) + ...............+ (cn x dn)] / [d1 + d2 + ............ + dn] ----------- Eq (5) 
+
+In whichever layer H lies , then all the parameters of succeeding layers would be put equal to zero in Eq(5) and the depth of that particular layer in Eq(5) would become equal to H - (summation of all the preceeding depths of preceeding layers.)
+
+For example, If H lies in Layer#1 , then c2 , d2, c3, d3, c4, d4 and so on would be zero in Eq(5) and d1 in Eq(5) would be H - 0 (since the summation is 0 because there are no preceeding layers.)
+
+If H lies in Layer#2, then c3, d3, c4, d4 and so on would be zero in Eq(5), while d1 in Eq(5) would be used from the database and d2 in Eq(5) would be H - d1
+
+If H lies in Layer#3, the c4, d4 and so on would be zero in Eq(5), while d1, d2 in Eq(5) would be used from the database and d3 in Eq(5) would be H - (d1 + d2)
+
+
+Now referring to Eq(1) 
+𝑞𝑢 = 1.3 x 𝑐 avg x 𝑁𝑐 +(γavg x H ) x 𝑁𝑞 + 0.4 x γavg x 𝐵 x 𝑁y ----------------- Eq(1) 
+where c avg is the weighted average cohesion, and γavg is the weighted average unit  weight
+Now using Eq(2) in this
+𝑞𝑢 = (q x 3)/ (B x B) ------ Eq(2)
+
+Now Referring back to Terzaghi Bearing Capacity equation
+The minimum value of H in Eq(1) would be 3 ft  and subsequent iterations would be performed.
+
+Put 1st value of H = 3ft in Eq(1) and follow the above guidelines as mentioned, to calculate B as B is the only unknown in Eq(1)
+Then  increment the value of H by 2 ft (which means that for 2nd iteration we will put H= 5 ft, for 3rd iteration we will put H=7 ft and so on).
+
+Always perform only 9 iterations. Starting from H=3 ft, then incrementing with 2ft depth in each iteration....So 3ft, 5 ft, 7 ft, 9 ft, 11 ft, 13 ft, 15 ft, 17 ft, 19 ft
+These would be the iterations.
+
+We will get output in the form of B values from these iterations.
+Now applying Check
+If B < 3 ft, then discard that value of B and that iteration
+If B > 7 ft then discard that value of B as well and that iteration as well
+Also discard those Iterations in which H/B > 4
+So we will get only those iterations that fulfil this criteria of H/B<4.
+
+Now these B values would be shown on the report.
+Now coming to the Preliminary Output Report which our end user would get as Foundation Design Recommendations.
+
