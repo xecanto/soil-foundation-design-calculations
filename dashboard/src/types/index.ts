@@ -31,8 +31,12 @@ export interface LocationStat {
   report_no: number
   sample_count: number
   avg_n: number
+  min_n: number
+  max_n: number
   avg_cohesion: number
+  avg_unit_weight: number
   max_depth: number
+  soil_types: string[]
 }
 
 export interface SoilType {
@@ -83,14 +87,21 @@ export interface FoundationResult {
   N_gamma: number
   phi: number
   layer_no: number
+  shape_c?: number
+  shape_q?: number
+  shape_gamma?: number
+  depth_c?: number
+  depth_q?: number
+  depth_gamma?: number
+  inclination_c?: number
+  inclination_q?: number
+  inclination_gamma?: number
 }
 
 export interface FoundationDesignResponse {
   results: FoundationResult[]
-  phi: number
-  Nc: number
-  Nq: number
-  N_gamma: number
+  terzaghi_results: FoundationResult[]
+  general_results: FoundationResult[]
   structural_load: number
 }
 
@@ -100,6 +111,7 @@ export interface SoilLayer {
   cohesion: number
   unit_weight: number
   uscs: string
+  friction_angle?: number
 }
 
 export interface LocationProperties {

@@ -29,6 +29,12 @@ export default function NVsCohesionScatter({ data }: Props) {
     groups[key].push(d)
   }
 
+  function formatTooltipValue(value: number | string | undefined, name: number | string | undefined) {
+    const displayValue = typeof value === 'number' ? value : value ?? ''
+    const displayName = typeof name === 'string' ? name : name?.toString() ?? ''
+    return [displayValue, displayName] as [number | string, string]
+  }
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ScatterChart margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -47,7 +53,7 @@ export default function NVsCohesionScatter({ data }: Props) {
         <Tooltip
           cursor={{ strokeDasharray: '3 3' }}
           contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
-          formatter={(v, n) => [v, n]}
+          formatter={(value, name) => formatTooltipValue(value as number | string | undefined, name as number | string | undefined)}
         />
         <Legend />
         {Object.entries(groups).map(([uscs, pts]) => (

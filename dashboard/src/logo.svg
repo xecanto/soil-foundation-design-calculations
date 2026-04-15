@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 550 160" width="100%">
+  <defs>
+    <linearGradient id="geoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A365D" />
+      <stop offset="100%" stop-color="#2B6CB0" />
+    </linearGradient>
+    <linearGradient id="foundGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9C4221" />
+      <stop offset="100%" stop-color="#DD6B20" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(40, 30)">
+    <path d="M 45 5 L 15 5 C 9.4 5 5 9.4 5 15 L 5 85 C 5 90.6 9.4 95 15 95 L 85 95 C 90.6 95 95 90.6 95 85 L 95 55 L 75 55 L 75 75 L 25 75 L 25 25 L 45 25 Z" fill="url(#geoGrad)"/>
+    
+    <rect x="55" y="5" width="40" height="15" fill="url(#foundGrad)" rx="3"/>
+    <rect x="55" y="30" width="40" height="15" fill="url(#foundGrad)" rx="3"/>
+    
+    <circle cx="25" cy="25" r="4" fill="#ED8936"/>
+  </g>
+
+  <text x="165" y="100" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="68" font-weight="800" fill="#1A365D" letter-spacing="-2">
+    Geo<tspan fill="#DD6B20">found</tspan>
+  </text>
+</svg>

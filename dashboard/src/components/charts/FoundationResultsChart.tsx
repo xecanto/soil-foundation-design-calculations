@@ -9,6 +9,16 @@ import { FoundationResult } from '@/types'
 interface Props { data: FoundationResult[] }
 
 export default function FoundationResultsChart({ data }: Props) {
+  function formatFeetValue(value: number | string | undefined) {
+    const display = typeof value === 'number' ? `${value.toFixed(3)} ft` : value ?? ''
+    return [display, ''] as [string, string]
+  }
+
+  function formatKpaValue(value: number | string | undefined) {
+    const display = typeof value === 'number' ? `${value.toFixed(1)} kPa` : value ?? ''
+    return [display, ''] as [string, string]
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -20,10 +30,10 @@ export default function FoundationResultsChart({ data }: Props) {
             <YAxis label={{ value: 'B (ft)', angle: -90, position: 'insideLeft', fontSize: 11 }} tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
-              formatter={(v: number) => [`${v.toFixed(3)} ft`, '']}
+              formatter={value => formatFeetValue(value as number | string | undefined)}
             />
             <ReferenceLine y={3} stroke="#f43f5e" strokeDasharray="4 2" label={{ value: 'B min 3ft', fontSize: 10 }} />
-            <ReferenceLine y={7} stroke="#f43f5e" strokeDasharray="4 2" label={{ value: 'B max 7ft', fontSize: 10 }} />
+            <ReferenceLine y={20} stroke="#f43f5e" strokeDasharray="4 2" label={{ value: 'B max 20ft', fontSize: 10 }} />
             <Line type="monotone" dataKey="B_ft" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 5 }} name="B (ft)" />
           </LineChart>
         </ResponsiveContainer>
@@ -38,7 +48,7 @@ export default function FoundationResultsChart({ data }: Props) {
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
-              formatter={(v: number) => [`${v.toFixed(1)} kPa`, '']}
+              formatter={value => formatKpaValue(value as number | string | undefined)}
             />
             <Legend />
             <Line type="monotone" dataKey="qu_kPa" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4 }} name="qu (kPa)" />

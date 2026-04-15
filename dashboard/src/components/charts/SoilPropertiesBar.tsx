@@ -9,14 +9,19 @@ import { SoilType } from '@/types'
 interface Props { data: SoilType[] }
 
 export default function SoilPropertiesBar({ data }: Props) {
+  const chartData = data.map(item => ({
+    ...item,
+    label: item.uscs_classification ?? item.type ?? 'Unknown',
+  }))
+
   return (
     <div className="space-y-8">
       <div>
         <p className="text-sm text-muted-foreground mb-2 font-medium">Avg N-Value by Soil Type</p>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="type" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
             <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
             <Tooltip
               contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
@@ -29,9 +34,9 @@ export default function SoilPropertiesBar({ data }: Props) {
       <div>
         <p className="text-sm text-muted-foreground mb-2 font-medium">Avg Cohesion & Unit Weight by Soil Type</p>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="type" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
             <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
             <Tooltip
               contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}

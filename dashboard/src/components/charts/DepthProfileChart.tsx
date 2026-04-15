@@ -2,7 +2,7 @@
 
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine,
+  ResponsiveContainer, Legend, Area, AreaChart,
 } from 'recharts'
 import { DepthProfile } from '@/types'
 
@@ -10,6 +10,11 @@ interface Props { data: DepthProfile[] }
 
 export default function DepthProfileChart({ data }: Props) {
   const sorted = [...data].sort((a, b) => a.depth - b.depth)
+
+  function formatTooltipValue(value: number | string | undefined) {
+    return [typeof value === 'number' ? value : value ?? '', ''] as [string | number, string]
+  }
+
   return (
     <div className="space-y-8">
       {/* N Value vs Depth */}
@@ -38,7 +43,7 @@ export default function DepthProfileChart({ data }: Props) {
                 border: '1px solid hsl(var(--border))',
                 borderRadius: 8,
               }}
-              formatter={(v: number) => [v, '']}
+              formatter={value => formatTooltipValue(value as number | string | undefined)}
               labelFormatter={(l) => `Depth: ${l} ft`}
             />
             <Legend />

@@ -2,7 +2,7 @@
 
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ZAxis, Cell,
+  ResponsiveContainer, ZAxis,
 } from 'recharts'
 import { LocationStat } from '@/types'
 
@@ -19,6 +19,12 @@ const CustomDot = (props: { cx?: number; cy?: number; payload?: LocationStat }) 
 interface Props { data: LocationStat[] }
 
 export default function GeoScatterMap({ data }: Props) {
+  function formatTooltipValue(value: number | string | undefined, name: number | string | undefined) {
+    const displayValue = typeof value === 'number' ? value.toFixed(4) : value ?? ''
+    const displayName = typeof name === 'string' ? name : name?.toString() ?? ''
+    return [displayValue, displayName] as [string, string]
+  }
+
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-2">
@@ -45,7 +51,7 @@ export default function GeoScatterMap({ data }: Props) {
           <Tooltip
             cursor={{ strokeDasharray: '3 3' }}
             contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-            formatter={(v, n) => [typeof v === 'number' ? v.toFixed(4) : v, n]}
+            formatter={(value, name) => formatTooltipValue(value as number | string | undefined, name as number | string | undefined)}
           />
           <Scatter
             data={data}

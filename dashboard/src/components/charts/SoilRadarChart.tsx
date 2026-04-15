@@ -9,17 +9,26 @@ import { SoilType } from '@/types'
 interface Props { data: SoilType[] }
 
 export default function SoilRadarChart({ data }: Props) {
+  const series = data
+    .map(item => ({
+      ...item,
+      label: item.uscs_classification ?? item.type ?? 'Unknown',
+    }))
+    .filter(item => item.label)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6)
+
   // Normalize each metric to 0-100 for radar display
-  const maxN = Math.max(...data.map(d => d.avg_n), 1)
-  const maxC = Math.max(...data.map(d => d.avg_cohesion), 1)
-  const maxUW = Math.max(...data.map(d => d.avg_unit_weight), 1)
-  const maxCount = Math.max(...data.map(d => d.count), 1)
+  const maxN = Math.max(...series.map(d => d.avg_n), 1)
+  const maxC = Math.max(...series.map(d => d.avg_cohesion), 1)
+  const maxUW = Math.max(...series.map(d => d.avg_unit_weight), 1)
+  const maxCount = Math.max(...series.map(d => d.count), 1)
 
   const radarData = [
-    { metric: 'Avg N-Value', ...Object.fromEntries(data.map(d => [d.type, Math.round((d.avg_n / maxN) * 100)])) },
-    { metric: 'Avg Cohesion', ...Object.fromEntries(data.map(d => [d.type, Math.round((d.avg_cohesion / maxC) * 100)])) },
-    { metric: 'Unit Weight', ...Object.fromEntries(data.map(d => [d.type, Math.round((d.avg_unit_weight / maxUW) * 100)])) },
-    { metric: 'Sample Count', ...Object.fromEntries(data.map(d => [d.type, Math.round((d.count / maxCount) * 100)])) },
+    { metric: 'Avg N-Value', ...Object.fromEntries(series.map(d => [d.label, Math.round((d.avg_n / maxN) * 100)])) },
+    { metric: 'Avg Cohesion', ...Object.fromEntries(series.map(d => [d.label, Math.round((d.avg_cohesion / maxC) * 100)])) },
+    { metric: 'Unit Weight', ...Object.fromEntries(series.map(d => [d.label, Math.round((d.avg_unit_weight / maxUW) * 100)])) },
+    { metric: 'Sample Count', ...Object.fromEntries(series.map(d => [d.label, Math.round((d.count / maxCount) * 100)])) },
   ]
 
   const COLORS = ['#6366f1', '#22d3ee', '#f59e0b', '#10b981', '#f43f5e', '#a78bfa']
@@ -30,11 +39,11 @@ export default function SoilRadarChart({ data }: Props) {
         <PolarGrid stroke="hsl(var(--border))" />
         <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
         <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9 }} />
-        {data.map((d, i) => (
+        {series.map((d, i) => (
           <Radar
-            key={d.type}
-            name={d.type}
-            dataKey={d.type}
+            key={d.label}
+            name={d.label}
+            dataKey={d.label}
             stroke={COLORS[i % COLORS.length]}
             fill={COLORS[i % COLORS.length]}
             fillOpacity={0.15}

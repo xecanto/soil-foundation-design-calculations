@@ -1,9 +1,21 @@
+import csv
 import math
+import os
+from functools import lru_cache
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func, distinct
 from models import db, GeotechnicalData, TerzaghiFactor
 
 api = Blueprint('api', __name__, url_prefix='/api')
+
+GENERAL_BEARING_CSV = os.path.join(
+    os.path.dirname(__file__), '..', 'General Bearing Capacity.csv'
+)
+B_MIN_FT = 3.0
+B_MAX_FT = 20.0
+B_MIN_M = B_MIN_FT * 0.3048
+B_MAX_M = B_MAX_FT * 0.3048
+B_OVER_L = 1.0
 
 # -----------------------------------------------------------------------
 # Helpers
@@ -17,13 +29,208 @@ def _err(msg, code=400):
     return jsonify({'success': False, 'error': msg}), code
 
 
-def _get_terzaghi(phi: int):
-    """Return Nc, Nq, N_gamma for given friction angle (clamped to table range)."""
-    phi = max(0, min(48, int(phi)))
-    factor = TerzaghiFactor.query.filter_by(friction_angle=phi).first()
-    if factor:
-        return float(factor.nc), float(factor.nq), float(factor.n_gamma)
-    return 5.7, 1.0, 0.0
+def _interpolate_triplet(phi: float, lower_phi: int, upper_phi: int, lower_values: tuple[float, float, float], upper_values: tuple[float, float, float]):
+    if lower_phi == upper_phi:
+        return lower_values
+
+    ratio = (phi - lower_phi) / (upper_phi - lower_phi)
+    return tuple(
+        lower + (upper - lower) * ratio
+        for lower, upper in zip(lower_values, upper_values)
+    )
+
+
+def _get_terzaghi(phi: float):
+    """Return interpolated Nc, Nq, N_gamma for a friction angle."""
+    phi = max(0.0, min(48.0, float(phi)))
+    lower_phi = int(math.floor(phi))
+    upper_phi = int(math.ceil(phi))
+
+    lower = TerzaghiFactor.query.filter_by(friction_angle=lower_phi).first()
+    upper = TerzaghiFactor.query.filter_by(friction_angle=upper_phi).first()
+
+    lower_values = (
+        float(lower.nc) if lower else 5.7,
+        float(lower.nq) if lower else 1.0,
+        float(lower.n_gamma) if lower else 0.0,
+    )
+    upper_values = (
+        float(upper.nc) if upper else lower_values[0],
+        float(upper.nq) if upper else lower_values[1],
+        float(upper.n_gamma) if upper else lower_values[2],
+    )
+
+    return _interpolate_triplet(phi, lower_phi, upper_phi, lower_values, upper_values)
+
+
+@lru_cache(maxsize=1)
+def _load_general_factors():
+    rows: dict[int, tuple[float, float, float]] = {}
+    with open(GENERAL_BEARING_CSV, newline='', encoding='utf-8-sig') as csvfile:
+      reader = csv.reader(csvfile)
+      next(reader, None)
+      for raw_row in reader:
+          if len(raw_row) < 4:
+              continue
+          phi = int(float(raw_row[0]))
+          rows[phi] = (
+              float(raw_row[1]),
+              float(raw_row[2]),
+              float(raw_row[3]),
+          )
+    return rows
+
+
+def _get_general_bearing(phi: float):
+    """Return interpolated Nc, Nq, Ny for the General Bearing Capacity table."""
+    table = _load_general_factors()
+    min_phi = min(table.keys())
+    max_phi = max(table.keys())
+    phi = max(float(min_phi), min(float(max_phi), float(phi)))
+    lower_phi = int(math.floor(phi))
+    upper_phi = int(math.ceil(phi))
+    lower_values = table.get(lower_phi, table[min_phi])
+    upper_values = table.get(upper_phi, lower_values)
+    return _interpolate_triplet(phi, lower_phi, upper_phi, lower_values, upper_values)
+
+
+def _get_sorted_layers(lat: float, lon: float, layers_input):
+    if layers_input:
+        return sorted(layers_input, key=lambda layer: float(layer['depth']))
+
+    tolerance = 0.001
+    rows = GeotechnicalData.query.filter(
+        GeotechnicalData.latitude.between(lat - tolerance, lat + tolerance),
+        GeotechnicalData.longitude.between(lon - tolerance, lon + tolerance),
+    ).order_by(GeotechnicalData.depth).all()
+
+    if not rows:
+        return None
+
+    return [
+        {
+            'depth': float(r.depth),
+            'cohesion': float(r.cohesion),
+            'unit_weight': float(r.unit_weight),
+            'uscs': r.uscs_classification.strip(),
+            'friction_angle': float(r.friction_angle) if r.friction_angle else 0.0,
+        }
+        for r in rows
+    ]
+
+
+def _weighted_layer_properties(sorted_layers, H_ft: float):
+    layer_idx = None
+    for i, layer in enumerate(sorted_layers):
+        if H_ft <= float(layer['depth']):
+            layer_idx = i
+            break
+    if layer_idx is None:
+        layer_idx = len(sorted_layers) - 1
+
+    gamma_num = 0.0
+    c_num = 0.0
+    phi_num = 0.0
+    denom = 0.0
+
+    for i, layer in enumerate(sorted_layers[:layer_idx + 1]):
+        prev_depth = float(sorted_layers[i - 1]['depth']) if i > 0 else 0.0
+        current_depth = float(layer['depth'])
+        thickness = current_depth - prev_depth if i < layer_idx else H_ft - prev_depth
+        gamma_num += float(layer['unit_weight']) * thickness
+        c_num += float(layer['cohesion']) * thickness
+        phi_num += float(layer.get('friction_angle') or 0.0) * thickness
+        denom += thickness
+
+    gamma_avg = gamma_num / denom if denom else float(sorted_layers[0]['unit_weight'])
+    c_avg = c_num / denom if denom else float(sorted_layers[0]['cohesion'])
+    phi_avg = phi_num / denom if denom else float(sorted_layers[0].get('friction_angle') or 0.0)
+
+    return gamma_avg, c_avg, phi_avg, layer_idx + 1
+
+
+def _general_depth_factors(phi_rad: float, Nc: float, H_over_B: float):
+    modifier = H_over_B if H_over_B <= 1 else math.atan(H_over_B)
+    if abs(phi_rad) < 1e-9:
+        dc = 1 + 0.4 * modifier
+        dq = 1.0
+    else:
+        dq = 1 + 2 * math.tan(phi_rad) * ((1 - math.sin(phi_rad)) ** 2) * modifier
+        denominator = Nc * math.tan(phi_rad)
+        dc = dq - ((1 - dq) / denominator) if abs(denominator) > 1e-9 else dq
+    dgamma = 1.0
+    return dc, dq, dgamma
+
+
+def _general_shape_factors(phi_rad: float, Nc: float, Nq: float):
+    sc = 1 + B_OVER_L * (Nq / Nc) if abs(Nc) > 1e-9 else 1.0
+    sq = 1 + B_OVER_L * math.tan(phi_rad)
+    sgamma = 1 - 0.4 * B_OVER_L
+    return sc, sq, sgamma
+
+
+def _general_qu(B_m: float, H_m: float, gamma_avg: float, c_avg: float, phi_deg: float, Nc: float, Nq: float, N_gamma: float):
+    phi_rad = math.radians(phi_deg)
+    H_over_B = H_m / B_m if B_m > 0 else 0.0
+    sc, sq, sgamma = _general_shape_factors(phi_rad, Nc, Nq)
+    dc, dq, dgamma = _general_depth_factors(phi_rad, Nc, H_over_B)
+    ic = iq = igamma = 1.0
+    surcharge = gamma_avg * H_m
+    qu = (
+        c_avg * Nc * sc * dc * ic
+        + surcharge * Nq * sq * dq * iq
+        + 0.5 * gamma_avg * B_m * N_gamma * sgamma * dgamma * igamma
+    )
+    return qu, surcharge, {
+        'sc': sc,
+        'sq': sq,
+        's_gamma': sgamma,
+        'dc': dc,
+        'dq': dq,
+        'd_gamma': dgamma,
+        'ic': ic,
+        'iq': iq,
+        'i_gamma': igamma,
+    }
+
+
+def _solve_general_for_B(structural_load: float, H_m: float, gamma_avg: float, c_avg: float, phi_deg: float, Nc: float, Nq: float, N_gamma: float):
+    def diff(B_m: float):
+        qu, _, _ = _general_qu(B_m, H_m, gamma_avg, c_avg, phi_deg, Nc, Nq, N_gamma)
+        return qu - (3.0 * structural_load) / (B_m ** 2)
+
+    steps = 300
+    previous_B = B_MIN_M
+    previous_value = diff(previous_B)
+    if abs(previous_value) < 1e-9:
+        return previous_B
+
+    for step in range(1, steps + 1):
+        current_B = B_MIN_M + (B_MAX_M - B_MIN_M) * (step / steps)
+        current_value = diff(current_B)
+
+        if abs(current_value) < 1e-9:
+            return current_B
+
+        if previous_value * current_value < 0:
+            low, high = previous_B, current_B
+            for _ in range(80):
+                mid = (low + high) / 2
+                mid_value = diff(mid)
+                if abs(mid_value) < 1e-8:
+                    return mid
+                if previous_value * mid_value <= 0:
+                    high = mid
+                    current_value = mid_value
+                else:
+                    low = mid
+                    previous_value = mid_value
+            return (low + high) / 2
+
+        previous_B = current_B
+        previous_value = current_value
+
+    return None
 
 
 # -----------------------------------------------------------------------
@@ -289,138 +496,100 @@ def foundation_design():
     lon = body.get('longitude')
     structural_load = body.get('structural_load')  # kN
     layers_input = body.get('layers')  # optional, for User#2
-    friction_angle_input = body.get('friction_angle', 0)
-
     if lat is None or lon is None or structural_load is None:
         return _err('latitude, longitude and structural_load are required')
 
-    # Decide User#1 or User#2
-    if layers_input:
-        # User#2 – use supplied layers directly
-        layers = layers_input  # list of {depth, cohesion, unit_weight, friction_angle, uscs}
-        phi = float(layers[0].get('friction_angle', friction_angle_input))
-    else:
-        # User#1 – pull from DB (nearest location using Voronoi-like lookup)
-        tolerance = 0.001
-        rows = GeotechnicalData.query.filter(
-            GeotechnicalData.latitude.between(lat - tolerance, lat + tolerance),
-            GeotechnicalData.longitude.between(lon - tolerance, lon + tolerance),
-        ).order_by(GeotechnicalData.depth).all()
+    sorted_layers = _get_sorted_layers(float(lat), float(lon), layers_input)
+    if not sorted_layers:
+        return _err('Location not found in database. Please provide layer data.', 404)
 
-        if not rows:
-            return _err('Location not found in database. Please provide layer data.', 404)
-
-        layers = [
-            {
-                'depth': float(r.depth),
-                'cohesion': float(r.cohesion),
-                'unit_weight': float(r.unit_weight),
-                'uscs': r.uscs_classification.strip(),
-            }
-            for r in rows
-        ]
-        phi = 0  # User#1 always φ=0
-
-    # Get Terzaghi bearing factors
-    Nc, Nq, N_gamma = _get_terzaghi(int(phi))
     q_kN = float(structural_load)
 
     H_values = [3, 5, 7, 9, 11, 13, 15, 17, 19]  # ft
 
-    results = []
+    terzaghi_results = []
+    general_results = []
 
     for H in H_values:
-        # Convert depth increments to ft (data depth is in ft already per spec)
-        # Identify which layer H falls in
-        depths = [l['depth'] for l in layers]  # cumulative depth markers in ft
+        gamma_avg, c_avg, phi_avg, layer_no = _weighted_layer_properties(sorted_layers, H)
 
-        # Build layer segments: each layer has a thickness
-        # The depths in data are cumulative (e.g. 5, 10, 15 → thicknesses 5, 5, 5)
-        # We treat depth values as cumulative
-        sorted_layers = sorted(layers, key=lambda x: x['depth'])
-
-        layer_idx = None
-        for i, layer in enumerate(sorted_layers):
-            if H <= layer['depth']:
-                layer_idx = i
-                break
-        if layer_idx is None:
-            layer_idx = len(sorted_layers) - 1
-
-        # Compute weighted averages up to H
-        gamma_num = 0.0
-        c_num = 0.0
-        denom = 0.0
-
-        for i, layer in enumerate(sorted_layers[:layer_idx + 1]):
-            prev_depth = sorted_layers[i - 1]['depth'] if i > 0 else 0
-            if i < layer_idx:
-                thickness = layer['depth'] - prev_depth
-            else:
-                thickness = H - prev_depth
-            gamma_num += layer['unit_weight'] * thickness
-            c_num += layer['cohesion'] * thickness
-            denom += thickness
-
-        gamma_avg = gamma_num / denom if denom else sorted_layers[0]['unit_weight']
-        c_avg = c_num / denom if denom else sorted_layers[0]['cohesion']
-
-        # Q surcharge (kN/m²) = γavg × H (ft → m for kN/m²)
         H_m = H * FT_TO_M
         Q_surcharge = gamma_avg * H_m
+        terzaghi_Nc, terzaghi_Nq, terzaghi_N_gamma = _get_terzaghi(phi_avg)
+        general_Nc, general_Nq, general_N_gamma = _get_general_bearing(phi_avg)
 
-        # Terzaghi eq: qu = 1.3*c*Nc + Q*Nq + 0.4*γ*B*N_gamma  [kN/m²]
-        # Structural: qu = (q_kN * 3) / B²  → two equations equal → solve for B
-        # q_kN*3 / B² = 1.3*c*Nc + Q*Nq + 0.4*γ*B*Nγ
-        # 0.4*γ*Nγ * B³ + (1.3*c*Nc + Q*Nq) * B² - 3*q_kN = 0
-        A_coeff = 0.4 * gamma_avg * N_gamma
-        B_coeff = 1.3 * c_avg * Nc + Q_surcharge * Nq
+        A_coeff = 0.4 * gamma_avg * terzaghi_N_gamma
+        B_coeff = 1.3 * c_avg * terzaghi_Nc + Q_surcharge * terzaghi_Nq
         C_val = -3.0 * q_kN
-
-        # Solve cubic: A*B³ + B_coeff*B² + C_val = 0
         B_sol = _solve_cubic_for_B(A_coeff, B_coeff, C_val)
+        if B_sol is not None and B_sol > 0:
+            B_ft = B_sol / FT_TO_M
+            if B_MIN_FT <= B_ft <= B_MAX_FT and H / B_ft <= 4:
+                qu = B_coeff + A_coeff * B_sol
+                qa = qu / 3.0
+                terzaghi_results.append({
+                    'iteration': H_values.index(H) + 1,
+                    'H_ft': H,
+                    'H_m': round(H_m, 3),
+                    'B_ft': round(B_ft, 3),
+                    'B_m': round(B_sol, 3),
+                    'H_over_B': round(H / B_ft, 3),
+                    'gamma_avg': round(gamma_avg, 3),
+                    'c_avg': round(c_avg, 3),
+                    'Q_surcharge': round(Q_surcharge, 3),
+                    'qu_kPa': round(qu, 2),
+                    'qa_kPa': round(qa, 2),
+                    'Nc': round(terzaghi_Nc, 3),
+                    'Nq': round(terzaghi_Nq, 3),
+                    'N_gamma': round(terzaghi_N_gamma, 3),
+                    'phi': round(phi_avg, 3),
+                    'layer_no': layer_no,
+                })
 
-        if B_sol is None or B_sol <= 0:
+        general_B = _solve_general_for_B(q_kN, H_m, gamma_avg, c_avg, phi_avg, general_Nc, general_Nq, general_N_gamma)
+        if general_B is None or general_B <= 0:
             continue
 
-        # Convert B from metres to feet
-        B_ft = B_sol / FT_TO_M
-
-        # Apply design checks — only reject impractical / unstable cases
-        if H / B_ft > 4:
+        general_B_ft = general_B / FT_TO_M
+        if not (B_MIN_FT <= general_B_ft <= B_MAX_FT) or H / general_B_ft > 4:
             continue
 
-        qu = B_coeff + A_coeff * B_sol  # kN/m²
-        qa = qu / 3.0  # Factor of safety 3
-
-        results.append({
+        general_qu, _, factors = _general_qu(general_B, H_m, gamma_avg, c_avg, phi_avg, general_Nc, general_Nq, general_N_gamma)
+        general_results.append({
             'iteration': H_values.index(H) + 1,
             'H_ft': H,
             'H_m': round(H_m, 3),
-            'B_ft': round(B_ft, 3),
-            'B_m': round(B_sol, 3),
-            'H_over_B': round(H / B_ft, 3),
+            'B_ft': round(general_B_ft, 3),
+            'B_m': round(general_B, 3),
+            'H_over_B': round(H / general_B_ft, 3),
             'gamma_avg': round(gamma_avg, 3),
             'c_avg': round(c_avg, 3),
             'Q_surcharge': round(Q_surcharge, 3),
-            'qu_kPa': round(qu, 2),
-            'qa_kPa': round(qa, 2),
-            'Nc': Nc,
-            'Nq': Nq,
-            'N_gamma': N_gamma,
-            'phi': phi,
-            'layer_no': layer_idx + 1,
+            'qu_kPa': round(general_qu, 2),
+            'qa_kPa': round(general_qu / 3.0, 2),
+            'Nc': round(general_Nc, 3),
+            'Nq': round(general_Nq, 3),
+            'N_gamma': round(general_N_gamma, 3),
+            'phi': round(phi_avg, 3),
+            'layer_no': layer_no,
+            'shape_c': round(factors['sc'], 3),
+            'shape_q': round(factors['sq'], 3),
+            'shape_gamma': round(factors['s_gamma'], 3),
+            'depth_c': round(factors['dc'], 3),
+            'depth_q': round(factors['dq'], 3),
+            'depth_gamma': round(factors['d_gamma'], 3),
+            'inclination_c': round(factors['ic'], 3),
+            'inclination_q': round(factors['iq'], 3),
+            'inclination_gamma': round(factors['i_gamma'], 3),
         })
 
-    if not results:
+    if not terzaghi_results and not general_results:
         return _err('No valid foundation design found for the given parameters.', 422)
 
     return _ok({
-        'results': results,
-        'phi': phi,
-        'Nc': Nc,
-        'Nq': Nq,
-        'N_gamma': N_gamma,
+        'results': terzaghi_results,
+        'terzaghi_results': terzaghi_results,
+        'general_results': general_results,
         'structural_load': q_kN,
     })
 

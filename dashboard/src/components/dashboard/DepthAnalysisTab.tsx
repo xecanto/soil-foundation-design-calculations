@@ -18,6 +18,10 @@ interface Props {
 }
 
 export default function DepthAnalysisTab({ depthProfiles, cohesionHistogram }: Props) {
+  function formatTooltipValue(value: number | string | undefined) {
+    return [typeof value === 'number' ? value : value ?? '', 'Count'] as [number | string, string]
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -40,10 +44,10 @@ export default function DepthAnalysisTab({ depthProfiles, cohesionHistogram }: P
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={cohesionHistogram} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="bucket" angle={-35} textAnchor="end" tick={{ fontSize: 11 }} />
+                <XAxis dataKey="range" angle={-35} textAnchor="end" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} label={{ value: 'Count', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }} />
                 <Tooltip
-                  formatter={(v: number) => [v, 'Count']}
+                  formatter={value => formatTooltipValue(value as number | string | undefined)}
                   contentStyle={{ borderRadius: '8px', fontSize: '13px' }}
                 />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>

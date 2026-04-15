@@ -6,6 +6,18 @@ Hassan Iliyas · Islamabad Zone 4 · 459 borehole samples · 82 reports · 81 si
 
 ---
 
+## Documentation
+
+Additional project documentation is available under `docs/`:
+
+- `docs/README.md` for the documentation index
+- `docs/architecture.md` for the system overview
+- `docs/dashboard-workflows.md` for user journeys and dashboard behavior
+- `docs/backend-api.md` for API behavior and calculation notes
+- `docs/development.md` for setup, assets, and local development conventions
+
+---
+
 ## Stack
 
 | Layer | Tech |

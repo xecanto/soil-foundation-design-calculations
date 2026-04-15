@@ -25,7 +25,7 @@ export default function OverviewTab({ stats, histogram, soilTypes, scatter }: Pr
             <CardTitle className="text-base">N-Value Distribution</CardTitle>
           </CardHeader>
           <CardContent>
-            <NValueHistogram data={histogram} />
+            <NValueHistogram data={histogram} title="N-Value Frequency" />
           </CardContent>
         </Card>
 
